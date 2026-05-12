@@ -210,6 +210,7 @@ def set_root(tree, **kwargs):
                         finished = True
                 else:
                     _end = _start + direction * threshold * numpy.linspace(0.75, 1.5, attempts).reshape(-1, 1)
+                    print(_end)
                     values = tree.domain(_end[:, :tree.domain.points.shape[1]]).flatten()
                     if len(values[values < (interior_range[1] + within_tolerance)]) > 0:
                         _end = _end[values < (interior_range[1] + within_tolerance), :]
@@ -247,6 +248,11 @@ def set_root(tree, **kwargs):
     elif _end.shape[0] != 1:
         _end = _end[0:1, :]
 
+
+    # print("Start Points of root are {}".format(_start))
+    # print("End Points of root are {}".format(_end))
+    
+    # print(_start[0])
     u, v, w = basis(_start.astype(numpy.float64), _end.astype(numpy.float64))
 
     # Flatten all arrays to 1D for assignment to root_vessel row

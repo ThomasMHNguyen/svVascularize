@@ -176,13 +176,17 @@ class Domain(object):
         Set the random seed for the domain.
         """
         self.random_seed = seed
+        self.set_random_generator() 
+        # Also lock the global numpy seed for safety
+        np.random.seed(seed)
         return None
 
     def set_random_generator(self):
         """
         Set the random generator for the domain.
         """
-        self.random_generator = np.random.Generator(np.random.PCG64(seed=self.random_seed))
+        self.random_generator = np.random.default_rng(self.random_seed)
+        # self.random_generator = np.random.Generator(np.random.PCG64(seed=self.random_seed))
         return None
 
     def create(self,
@@ -827,9 +831,9 @@ class Domain(object):
             while remaining_points > 0:
                 if self.points.shape[1] == 3:
                     #if isinstance(tree, KDTreeManager) and isinstance(threshold, float) and not convex:
-                    #print(f"threshold: {threshold}; threshold_volume: {volume_threshold}")
-                    if isinstance(threshold, float) and not convex:
-                        #print("inside loop")
+                    # print(f"threshold: {threshold}; threshold_volume: {volume_threshold}")
+                    if isinstance(threshold, float) and not convex: #Does not run for cube
+                        # print("inside loop")
                         #cells_outer = []
                         start = perf_counter()
                         #cells_0 = tree.query_ball_tree(self.mesh_tree, volume_threshold, eps=volume_threshold/100)
@@ -950,6 +954,18 @@ class Domain(object):
             #    print(f'Choice Calculation took {choice_calc} seconds')
             #if domain_calc > 0.01:
             #    print(f'Domain Calculation took {domain_calc} seconds')
+            
+            # --- START DEBUG PASTE ---
+            # if not hasattr(self, '_already_printed'):
+            #     print("\n" + "="*30)
+            #     print("DETERMINISM CHECK")
+            #     print(f"Domain Seed: {self.random_seed}")
+            #     # points[0] is the very first coordinate sampled
+            #     print(f"First Point Sampled: {points[0]}") 
+            #     print("="*30 + "\n")
+            #     self._already_printed = True
+            # --- END DEBUG PASTE ---
+
         return points, cells
 
     def get_boundary_points(self, n, method=None, **kwargs):

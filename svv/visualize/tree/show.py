@@ -74,6 +74,8 @@ def show(tree, color='red', plot_domain=False, return_plotter=False, **kwargs):
         length = tree.data.get('length', i)
         vessel = pyvista.Cylinder(center=center, direction=direction, radius=radius, height=length)
         plotter.add_mesh(vessel, color=color)
+    #Show Axes in 3D plot
+    plotter.show_axes()
     if plot_domain:
         plotter.add_mesh(tree.domain.boundary, color='grey', opacity=0.25)
     if return_plotter:

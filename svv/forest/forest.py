@@ -301,7 +301,8 @@ class Forest(object):
                                                                    clearance=self.physical_clearance)
                                     collisions.append(collision)
                                     if collision:
-                                        print("Collision detected {}-{}.".format(h, q))
+                                        # print("Collision detected {}-{}.".format(h, q))
+                                        continue
                                         break
                                 if any(collisions):
                                     break

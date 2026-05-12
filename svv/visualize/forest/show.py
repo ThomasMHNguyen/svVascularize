@@ -57,6 +57,9 @@ def show(forest, plot_domain=False, return_plotter=False, **kwargs):
                     vessel = pyvista.Cylinder(center=center, direction=direction, radius=radius, height=length)
                     plotter.add_mesh(vessel, color=colors[count % len(colors)])
                 count += 1
+
+    #Show Axes in 3D plot
+    plotter.show_axes()
     if plot_domain:
         plotter.add_mesh(forest.domain.boundary, color='grey', opacity=0.25)
     if return_plotter:

@@ -104,7 +104,9 @@ def add_vessel(tree, **kwargs):
     #                      tree.parameters.radius_exponent, tree.parameters.length_exponent)
     tree_scale = tree.tree_scale
     tree.volume_scale = tree_scale
-    threshold = kwargs.pop('threshold', defualt_threshold)
+    threshold = kwargs.pop('threshold', 0.3)
+    volume_threshold = kwargs.get("volume_threshold",None)
+    # volume_threshold = kwargs.get("volume_threshold",None)
     nonconvex_outside = False
     #search_tree = cKDTree((tree.data[:, 0:3] + tree.data[:, 3:6]) / 2)
     data = tree.data[:tree.segment_count, :]
@@ -142,7 +144,9 @@ def add_vessel(tree, **kwargs):
                 get_points_start = perf_counter()
                 terminal_points, terminal_point_distances, closest_vessels, mesh_cells = get_points(tree, n_points, threshold=threshold,
                                                                                         interior_range=interior_range,
-                                                                                        n_vessels=n_closest_vessels)
+                                                                                        n_vessels=n_closest_vessels,
+                                                                                        volume_threshold = volume_threshold
+                                                                                        )
                 if numpy.all(numpy.isnan(terminal_points)) or len(terminal_points) == 0:
                     threshold *= threshold_adjuster
                     #print('Error: all nan points')
@@ -152,6 +156,74 @@ def add_vessel(tree, **kwargs):
                     closest_vessels = closest_vessels[:, ~numpy.isnan(terminal_points).any(axis=1)]
                     mesh_cells = mesh_cells[~numpy.isnan(terminal_points).any(axis=1)]
                     terminal_points = terminal_points[~numpy.isnan(terminal_points).any(axis=1)]
+                    
+                """ --- TEST HERE FOR CONSTRAINTS OF GROWTH DIRECTION --- """
+                if len(terminal_points) > 0:
+                    # Goal 2a: Directional Filter
+                    valid_mask = []
+                    # Obtain the GLOBAL parent vessel
+                    # v_global_intent = tree.data[0,12:15]
+                    v_global_intent = tree.data[0,3:6] - tree.data[0,0:3]
+                    norm_global = np.linalg.norm(v_global_intent)
+                    
+                    for i in range(len(terminal_points)):
+                        
+                        # Get the LOCAL parent vessel
+                        parent_idx = int(closest_vessels[0, i]) # checking the closest one
+                        parent_tip = tree.data[parent_idx, 3:6]
+                        parent_start = tree.data[parent_idx, 0:3]
+                        
+                        # Growth of new vessel from local tip to the new point
+                        v_growth = terminal_points[i] - parent_tip
+                        norm_g = np.linalg.norm(v_growth)
+                        
+                        # 4. Local parent direction
+                        v_local_parent = parent_tip - parent_start
+                        norm_lp = np.linalg.norm(v_local_parent)
+                        
+                        if norm_g > 0 and norm_lp > 0 and norm_global > 0:
+                            # Check A: Is it growing forward relative to its LOCAL parent?
+                            cos_local = np.dot(v_local_parent, v_growth) / (norm_lp * norm_g)
+                            
+                            # Check B: Is it growing forward relative to the GLOBAL vesel direction?
+                            # This prevents the tree from doubling back toward the inlet
+                            cos_global = np.dot(v_global_intent, v_growth) / (norm_global * norm_g)
+                            
+                            # Use a stricter threshold (0.5 = 60 degrees) to prevent "sideways" stretching
+                            is_forward = (cos_local > 0.2) and (cos_global > 0.2)
+                        else:
+                            is_forward = False
+                            
+                        valid_mask.append(is_forward)
+                    #     # Vector from main parent vessel
+                    #     v_parent = tree.data[0, 3:6] - tree.data[0, 0:3]
+                    #     # Vector from parent end to new terminal point
+                    #     v_growth = terminal_points[i] - tree.data[0, 3:6]
+                        
+                    #     norm_p = np.linalg.norm(v_parent)
+                    #     norm_g = np.linalg.norm(v_growth)
+            
+                    #     if norm_p > 0 and norm_g > 0:
+                    #         cos_theta = np.dot(v_parent, v_growth) / (norm_p * norm_g)
+                    #         # cos_theta > 0 means angle < 90 degrees (Forward growth)
+                    #         is_forward = cos_theta > 0 
+                    #     else:
+                    #         is_forward = False
+                    #     valid_mask.append(is_forward)
+            
+                    terminal_points = terminal_points[valid_mask]
+                    terminal_point_distances = terminal_point_distances[:, valid_mask]
+                    closest_vessels = closest_vessels[:, valid_mask]
+                    mesh_cells = mesh_cells[valid_mask]
+                    
+                    
+                    if len(terminal_points) == 0:
+                        threshold *= threshold_adjuster
+                        # tree.times['get_points'] logic here if needed
+                        continue
+    
+                """ --- END OF TEST FOR CONSTRAINTS OF GROWTH DIRECTION  --- """
+            
                 #closest_vessels = numpy.argsort(terminal_point_distances, axis=0)
                 n_closest_vessels = min(n_closest_vessels, data.shape[0])
                 get_points_end = perf_counter()
@@ -170,6 +242,7 @@ def add_vessel(tree, **kwargs):
                         if dist < data[bifurcation_vessel, 21]*4:
                             #print('too close')
                             continue
+
                         cost, triad, vol = construct_optimizer(tree, terminal_points[i, :], closest_vessels[j, i])
                         bifurcation_cell = mesh_cells[i]
                         if callback:
@@ -1988,7 +2061,7 @@ def get_points(tree, n_points, **kwargs):
     search_tree = kwargs.get('search_tree', None)
     n_vessels = kwargs.get('n_vessels', min(data.shape[0], 10))
     n_heuristic = kwargs.get('n_heuristic', 500)
-    use_random_int = kwargs.get('use_random_int', False)
+    use_random_int = kwargs.get('use_random_int', True)
     threshold_cuttoff = kwargs.get('n_random_int', 10000)
     if tree.n_terminals >= threshold_cuttoff:
         threshold = 0.0
@@ -2020,6 +2093,7 @@ def get_points(tree, n_points, **kwargs):
             #print(f"Tree Convex: {tree.convex}")
             if not tree.convex and tree.n_terminals <= n_heuristic:
                 #print("correct interior")
+                print(tree.n_vessels)
                 tmp_points, cells = tree.domain.get_interior_points((2 * remaining_points), tree=midpoints, threshold=threshold,
                                                              volume_threshold=volume_threshold,
                                                              implicit_range=interior_range, use_random_int=use_random_int,
@@ -2029,7 +2103,12 @@ def get_points(tree, n_points, **kwargs):
                 #                                             volume_threshold=volume_threshold,
                 #                                             implicit_range=interior_range, convex=tree.convex)
                 #print("other interior")
-                tmp_points, cells = tree.domain.get_interior_points((2 * remaining_points))
+                tmp_points, cells = tree.domain.get_interior_points((2 * remaining_points),
+                                                                    tree = midpoints,
+                                                                    threshold = threshold,
+                                                                    volume_threshold = volume_threshold,
+                                                                    implicit_range=interior_range, 
+                                                                    use_random_int=use_random_int)
             end = perf_counter()
             #tree.times['get_points_0'][-1] += end - start
         elif where == 'exterior':
@@ -2123,6 +2202,8 @@ def get_points(tree, n_points, **kwargs):
         end = perf_counter()
         #tree.times['get_points_3'][-1] += end - start
     #point_distances = close_exact_points(tree.data, points)
+    # print("Threshold:",threshold)
+    # print("Volume Threshold:", volume_threshold)
     return points, point_distances, closest_vessel_idx, mesh_cells
 
 
