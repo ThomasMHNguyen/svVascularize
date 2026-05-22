@@ -158,44 +158,52 @@ def add_vessel(tree, **kwargs):
                     terminal_points = terminal_points[~numpy.isnan(terminal_points).any(axis=1)]
                     
                 """ --- TEST HERE FOR CONSTRAINTS OF GROWTH DIRECTION --- """
-                if len(terminal_points) > 0:
-                    # Goal 2a: Directional Filter
-                    valid_mask = []
-                    # Obtain the GLOBAL parent vessel
-                    # v_global_intent = tree.data[0,12:15]
-                    v_global_intent = tree.data[0,3:6] - tree.data[0,0:3]
-                    norm_global = np.linalg.norm(v_global_intent)
+                # if len(terminal_points) > 0:
+                #     # Goal 2a: Directional Filter
+                #     valid_mask = []
+                #     # Obtain the GLOBAL parent vessel
+                #     # v_global_intent = tree.data[0,12:15]
+                #     v_global_intent = tree.data[0,3:6] - tree.data[0,0:3]
+                #     norm_global = np.linalg.norm(v_global_intent)
                     
-                    for i in range(len(terminal_points)):
+                #     for i in range(len(terminal_points)):
                         
-                        # Get the LOCAL parent vessel
-                        parent_idx = int(closest_vessels[0, i]) # checking the closest one
-                        parent_tip = tree.data[parent_idx, 3:6]
-                        parent_start = tree.data[parent_idx, 0:3]
+                #         # Get the LOCAL parent vessel
+                #         # parent_idx = int(closest_vessels[0, i]) # checking the closest one
+                #         # Check ALL potential parents for this specific terminal point based on c_closest_
+                #         potential_parent_indices = closest_vessels[:n_closest_vessels, i].astype(int)
+                #         for parent_idx in potential_parent_indices:
+                #             valid_points = []
+                #             parent_tip = tree.data[parent_idx, 3:6]
+                #             parent_start = tree.data[parent_idx, 0:3]
                         
-                        # Growth of new vessel from local tip to the new point
-                        v_growth = terminal_points[i] - parent_tip
-                        norm_g = np.linalg.norm(v_growth)
-                        
-                        # 4. Local parent direction
-                        v_local_parent = parent_tip - parent_start
-                        norm_lp = np.linalg.norm(v_local_parent)
-                        
-                        if norm_g > 0 and norm_lp > 0 and norm_global > 0:
-                            # Check A: Is it growing forward relative to its LOCAL parent?
-                            cos_local = np.dot(v_local_parent, v_growth) / (norm_lp * norm_g)
+                #             # Growth of new vessel from local tip to the new point
+                #             v_growth = terminal_points[i] - parent_tip
+                #             norm_g = np.linalg.norm(v_growth)
                             
-                            # Check B: Is it growing forward relative to the GLOBAL vesel direction?
-                            # This prevents the tree from doubling back toward the inlet
-                            cos_global = np.dot(v_global_intent, v_growth) / (norm_global * norm_g)
+                #             # 4. Local parent direction
+                #             v_local_parent = parent_tip - parent_start
+                #             norm_lp = np.linalg.norm(v_local_parent)
                             
-                            # Use a stricter threshold (0.5 = 60 degrees) to prevent "sideways" stretching
-                            is_forward = (cos_local > 0.2) and (cos_global > 0.2)
-                        else:
-                            is_forward = False
-                            
-                        valid_mask.append(is_forward)
-                    #     # Vector from main parent vessel
+                #             if norm_g > 0 and norm_lp > 0 and norm_global > 0:
+                #                 # Check A: Is it growing forward relative to its LOCAL parent?
+                #                 cos_local = np.dot(v_local_parent, v_growth) / (norm_lp * norm_g)
+                                
+                #                 # Check B: Is it growing forward relative to the GLOBAL vesel direction?
+                #                 # This prevents the tree from doubling back toward the inlet
+                #                 cos_global = np.dot(v_global_intent, v_growth) / (norm_global * norm_g)
+                                
+                #                 # Use a stricter threshold (0.5 = 60 degrees) to prevent "sideways" stretching
+                #                 closest_forward = (cos_local > 0.2) and (cos_global > 0.2)
+                #             else:
+                #                 closest_forward = False
+                #             valid_points.append(closest_forward)
+                #         if all(valid_points):
+                #             is_forward = True
+                #         else:
+                #             is_forward = False                         
+                #         valid_mask.append(is_forward)
+                        # Vector from main parent vessel
                     #     v_parent = tree.data[0, 3:6] - tree.data[0, 0:3]
                     #     # Vector from parent end to new terminal point
                     #     v_growth = terminal_points[i] - tree.data[0, 3:6]
@@ -211,18 +219,18 @@ def add_vessel(tree, **kwargs):
                     #         is_forward = False
                     #     valid_mask.append(is_forward)
             
-                    terminal_points = terminal_points[valid_mask]
-                    terminal_point_distances = terminal_point_distances[:, valid_mask]
-                    closest_vessels = closest_vessels[:, valid_mask]
-                    mesh_cells = mesh_cells[valid_mask]
+                #     terminal_points = terminal_points[valid_mask]
+                #     terminal_point_distances = terminal_point_distances[:, valid_mask]
+                #     closest_vessels = closest_vessels[:, valid_mask]
+                #     mesh_cells = mesh_cells[valid_mask]
                     
-                    
-                    if len(terminal_points) == 0:
-                        threshold *= threshold_adjuster
-                        # tree.times['get_points'] logic here if needed
-                        continue
-    
                 """ --- END OF TEST FOR CONSTRAINTS OF GROWTH DIRECTION  --- """
+                if len(terminal_points) == 0:
+                    threshold *= threshold_adjuster
+                    # tree.times['get_points'] logic here if needed
+                    continue
+    
+                
             
                 #closest_vessels = numpy.argsort(terminal_point_distances, axis=0)
                 n_closest_vessels = min(n_closest_vessels, data.shape[0])
@@ -241,6 +249,8 @@ def add_vessel(tree, **kwargs):
                                           terminal_point)
                         if dist < data[bifurcation_vessel, 21]*4:
                             #print('too close')
+                            continue
+                        elif dist > data[bifurcation_vessel, 21]*10:
                             continue
 
                         cost, triad, vol = construct_optimizer(tree, terminal_points[i, :], closest_vessels[j, i])
@@ -328,10 +338,53 @@ def add_vessel(tree, **kwargs):
                         #    continue
                         terminal_vessel = TreeData()
                         ### CHECK ANGLES ###
+                        
+                        """ INSERT NEW ANGLE CHECK TESTING HERE """
+                        v_global_parent = (tree.data[0,3:6] - tree.data[0,0:3]).reshape(3,)
+                        norm_global = np.linalg.norm(v_global_parent)
+                        
+                        daughter_vessel = (terminal_point - tree.data[bifurcation_vessel,3:6]).reshape(3,)
+                        norm_daughter = np.linalg.norm(daughter_vessel)
+                        
+                        local_parent = (tree.data[bifurcation_vessel,3:6] - \
+                            tree.data[bifurcation_vessel,0:3]).reshape(3,)
+                        norm_local = np.linalg.norm(local_parent)
+                        
+                        cos_global = np.dot(v_global_parent,daughter_vessel)/\
+                            (norm_global*norm_daughter)
+                        cos_local = np.dot(local_parent,daughter_vessel)/\
+                            (norm_local*norm_daughter)
+                        # print("Terminal points are",terminal_point)
+                        # try:
+                        # if bifurcation_vessel == 3:
+                        
+                        # print("Problem vessel start point is",tree.data[6,0:3])
+                            # print("Terminal Points are:",terminal_point)
+                        # if (np.linalg.norm(np.abs(terminal_point.reshape(3,) - np.array([-0.01882263,  0.25617913,  0.34540027]))) < 1e-4):
+                        #     print("Terminal point pre connection is,",terminal_point)
+                        #     print("Bifurcation_vessel pre connection is",bifurcation_vessel)
+                        #     print("Bifurcation point pre connection is",bifurcation_point)
+                        #     print("Bifurcation vessel start is,",tree.data[bifurcation_vessel,0:3])
+                        #     print("Bifurcation vessel end is,",tree.data[bifurcation_vessel,3:6])
+                        #     print("cos global check is",cos_global)
+                        #     print("cos local check is",cos_local)
+                        #     print(tree.data.shape)
+                            
+                        # except IndexError:
+                            # pass
+                        if (cos_global > 0.5) and (cos_local > 0.5):
+                            pass
+                        else:
+                            continue
+                        
+                        """ END NEW ANGLE CHECK TESTING HERE """
                         vec_parent = (data[bifurcation_vessel, 0:3] - bifurcation_point).reshape(1,3)
                         vec_term = (terminal_point - bifurcation_point).reshape(1,3)
                         vec_daughter = (data[bifurcation_vessel, 3:6] - bifurcation_point).reshape(1,3)
                         angle = get_angles(vec_parent, vec_term)
+                        # print("bifurcation point is,",bifurcation_point)
+                        # print("bifurcation vessel is,",bifurcation_vessel)
+                        # print("terminal point is:",terminal_point)
                         #plotter = pv.Plotter()
                         #lines = [pv.Line(tree.data[bifurcation_vessel, 0:3], bifurcation_point),
                         #         pv.Line(bifurcation_point, terminal_point),
@@ -693,6 +746,19 @@ def add_vessel(tree, **kwargs):
                                            tree.parameters.kinematic_viscosity*tree.parameters.fluid_density, tree.parameters.terminal_flow,
                                            tree.parameters.terminal_pressure, tree.parameters.root_pressure,
                                            tree.parameters.radius_exponent, tree.parameters.length_exponent)
+                        """ CHECK TERMINAL POINT DOWNSTREAM"""
+                        if (np.linalg.norm(np.abs(terminal_point.reshape(3,) - np.array([-0.01882263,  0.25617913,  0.34540027]))) < 1e-4):
+                            pass
+                            # print("Parent vessel start is",parent_vessel[0,0:3])
+                            # print("Parent vessel end is",parent_vessel[0,3:6])
+                            # print("Terminal daughter vessel start is",terminal_daughter_vessel[0,0:3])
+                            # print("Terminal daughter vessel end is",terminal_daughter_vessel[0,3:6])
+                            # print("Terminal Vessel start is",terminal_vessel[0,0:3])
+                            # print("Terminal Vessel end is",terminal_vessel[0,3:6])
+                            # print("Terminal point post connection is",terminal_point)
+                            # print("bifurcation point post connection is",bifurcation_point)
+                            # print("Bifurcation vessel end post connection is ",data[bifurcation_vessel, 3:6])
+                            # print("Bifurcation vessel index post connection is",bifurcation_vessel)
                         start_3_0 = perf_counter()
                         terminal_map = TreeMap()
                         #upstream = numpy.array(sorted(set(tree.vessel_map[bifurcation_vessel]['upstream'])),dtype=int)
@@ -1171,6 +1237,7 @@ def add_vessel(tree, **kwargs):
                     threshold *= threshold_adjuster
                     #print('un-ideal threshold adjustment')
         else:
+            print("Non Convex Shape")
             success = False
             #pts = np.vstack((tree.data[:, 0:3], (tree.data[:, 0:3] + tree.data[:, 3:6])/2, tree.data[:, 3:6]))
             #search_tree = cKDTree(pts)
