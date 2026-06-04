@@ -66,7 +66,7 @@ class Forest(object):
                 else:
                     tree = Tree()
                 tree.physical_clearance = self.physical_clearance
-                tree.domain_clearance = 
+                tree.domain_clearance = self.domain_clearance
                 network.append(tree)
             networks.append(network)
         self.networks = networks
