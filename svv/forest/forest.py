@@ -48,6 +48,7 @@ class Forest(object):
         self.start_points = kwargs.get('start_points', None)
         self.directions = kwargs.get('directions', None)
         self.physical_clearance = kwargs.get('physical_clearance', 0.0)
+        self.domain_clearance = kwargs.get('domain_clearance', 0.0)
         self.compete = kwargs.get('compete', False)
         self.preallocation_step = kwargs.get('preallocation_step', None)
         self.geodesic = None
@@ -65,6 +66,7 @@ class Forest(object):
                 else:
                     tree = Tree()
                 tree.physical_clearance = self.physical_clearance
+                tree.domain_clearance = 
                 network.append(tree)
             networks.append(network)
         self.networks = networks
