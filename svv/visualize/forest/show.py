@@ -60,6 +60,7 @@ def show(forest, plot_domain=False, return_plotter=False, **kwargs):
 
     #Show Axes in 3D plot
     plotter.show_axes()
+    plotter.show_grid()
     if plot_domain:
         plotter.add_mesh(forest.domain.boundary, color='grey', opacity=0.25)
     if return_plotter:

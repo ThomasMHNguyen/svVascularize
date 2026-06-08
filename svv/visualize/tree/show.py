@@ -76,6 +76,7 @@ def show(tree, color='red', plot_domain=False, return_plotter=False, **kwargs):
         plotter.add_mesh(vessel, color=color)
     #Show Axes in 3D plot
     plotter.show_axes()
+    plotter.show_grid()
     if plot_domain:
         plotter.add_mesh(tree.domain.boundary, color='grey', opacity=0.25)
     if return_plotter:
