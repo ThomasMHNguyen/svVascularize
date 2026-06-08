@@ -224,11 +224,13 @@ def assign_network(forest, *args, **kwargs):
         #                      shape=(terminals_0_pts.shape[0], terminals_1_pts.shape[0]))
         print("Calculating optimal assignment...")
         #_, assignment = linear_sum_assignment(C)
+        # row_ind, col_ind = min_weight_full_bipartite_matching(C_sparse)
         try:
-            row_ind, col_ind = min_weight_full_bipartite_matching(C_sparse)
+            row_ind, col_ind = min_weight_full_bipartite_matching(C_sparse.tocsr())
         except:
             print("ERROR: Could not find optimal assignment. Try increasing the number of neighbors allowed in search.")
-            return None, None
+            raise ValueError
+            # return None, None
         print("Finished.")
         midpoints = []
         for i, j in zip(row_ind, col_ind):
