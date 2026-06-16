@@ -436,7 +436,7 @@ class TreeConnection:
             return None
         return pv.merge(solids)
 
-    def export_solid(self, cap_resolution=40, extrude_roots = False, junction_smoothing = False):
+    def export_solid(self, cap_resolution=40, extrude_roots = False):
         network_branches = []
         network_points = []
         network_radii = []
@@ -617,8 +617,6 @@ class TreeConnection:
         network_solids = []
         network_lines = []
         network_tubes = []
-        
-        """ START OF OLD IMPLEMENTATION """
         for i in range(len(interp_xyz)):
             xyz = interp_xyz[i]
             r = interp_radii[i]
@@ -627,18 +625,44 @@ class TreeConnection:
             tubes = generate_tubes(lines)
             network_tubes.append(tubes)
             model = union_tubes(tubes, lines, cap_resolution=cap_resolution)
-            cell_quality = model.compute_cell_quality(quality_measure='scaled_jacobian')
-            keep = cell_quality.cell_data["CellQuality"] > 0.1
-            if not np.all(keep):
-                print("Removing poor quality elements from the mesh.")
-                keep = np.argwhere(keep).flatten()
-                non_manifold_model = model.extract_cells(keep)
-                non_manifold_model = non_manifold_model.extract_surface()
-                fix = pymeshfix.MeshFix(non_manifold_model)
-                fix.repair(verbose=True)
-                hsize = model.hsize
-                model = fix.mesh.compute_normals(auto_orient_normals=True)
-                model.hsize = hsize
+            # return model
+            cell_quality = model.cell_quality(quality_measure = 'scaled_jacobian')
+            poor_quality_mask = cell_quality.cell_data["scaled_jacobian"] <= 0.1
+            # Only run repair if there are actually poor cells detected
+            if np.any(poor_quality_mask):
+                print(f"Removing {np.sum(poor_quality_mask)} poor quality elements from the mesh.")
+                
+                # Get the indices of the poor cells
+                # discard_indices = np.argwhere(poor_quality_mask).flatten()
+                
+                # Keep the GOOD cells and ditch the bad:
+                keep_indices = np.argwhere(~poor_quality_mask).flatten()
+                
+                # Extract the remaining good structure
+                non_manifold_model = model.extract_cells(keep_indices)
+                non_manifold_model = non_manifold_model.extract_surface(algorithm='geometry')
+                
+                # Cache hsize
+                hsize = model.cell_data['hsize'][0]
+                
+                # Let PyMeshFix patch the holes left behind by the discarded bad cells
+                if non_manifold_model.n_faces > 0:
+                    fix = pymeshfix.MeshFix(non_manifold_model)
+                    fix.repair(verbose=True)
+                    
+                    if fix.mesh.n_faces > 0:
+                        model = fix.mesh.compute_normals(auto_orient_normals=True)
+                    else:
+                        model = non_manifold_model.compute_normals(auto_orient_normals=True)
+                else:
+                    print("Warning: No faces left to repair.")
+                    
+                # Re-assign hsize array using our mutable approach
+                hsize_array = np.zeros(model.n_cells, dtype=float)
+                hsize_array[0] = hsize
+                model.cell_data['hsize'] = hsize_array
+            else:
+                print("Mesh quality is excellent! No elements needed removal.")
             try:
                 smooth_model, smooth_wall, smooth_caps = smooth_junctions(model)
             except:
@@ -652,8 +676,190 @@ class TreeConnection:
                     network_solids.append(model)
             else:
                 network_solids.append(model)
-        """ END OF OLD IMPLEMENTATION """
+        return network_solids, network_lines, network_tubes
+    
         
+    def export_solid_new(self, cap_resolution=40, extrude_roots = False, junction_smoothing = False):
+        network_branches = []
+        network_points = []
+        network_radii = []
+        network_normals = []
+        network_terminals = []
+        if extrude_roots:
+            for i in range(len(self.connected_network)):
+                direction = (self.connected_network[i].data[0, 3:6] - self.connected_network[i].data[0, 0:3])
+                direction = direction / np.linalg.norm(direction)
+                root_extension = self.connected_network[i].data[0, 21] * 4
+                start = self.connected_network[i].data[0, 0:3].copy()
+                for j in range(10):
+                    new_start = start - direction * root_extension * (j + 1)
+                    if self.forest.domain(new_start.reshape(1, 3)).flatten() > 0:
+                        self.connected_network[i].data[0, 0:3] = new_start
+                        break
+        for i in range(len(self.connected_network)):
+            branches = get_branches(self.connected_network[i].data)
+            network_branches.append(branches)
+            network_points.append(get_points(self.connected_network[i].data, branches))
+            network_radii.append(get_radii(self.connected_network[i].data, branches))
+            network_normals.append(get_normals(self.connected_network[i].data, branches))
+            terminals = []
+            for branch in branches:
+                terminals.append(branch[-1])
+            network_terminals.append(np.array(terminals))
+        # Match the branch terminals to the connection assignments
+        reordered_branches = []
+        reordered_points = []
+        reordered_radii = []
+        reordered_normals = []
+        for i in range(len(self.connected_network)):
+            tmp_reordered_branches = []
+            tmp_reordered_points = []
+            tmp_reordered_radii = []
+            tmp_reordered_normals = []
+            for a in range(len(self.assignments[i])):
+                ind = np.argwhere(network_terminals[i] == self.assignments[i][a]).flatten()[0]
+                tmp_reordered_branches.append(network_branches[i][ind])
+                tmp_reordered_points.append(network_points[i][ind])
+                tmp_reordered_radii.append(network_radii[i][ind])
+                tmp_reordered_normals.append(network_normals[i][ind])
+            reordered_branches.append(tmp_reordered_branches)
+            reordered_points.append(tmp_reordered_points)
+            reordered_radii.append(tmp_reordered_radii)
+            reordered_normals.append(tmp_reordered_normals)
+        # For trees != 0 the branches, points, radii, and normals need to be reversed
+        connection_vessels = deepcopy(self.vessels)
+        for i in range(1, len(reordered_branches)):
+            for j in range(len(reordered_branches[i])):
+                reordered_branches[i][j] = list(reversed(reordered_branches[i][j]))
+                reordered_points[i][j] = list(reversed(reordered_points[i][j]))
+                reordered_radii[i][j] = list(reversed(reordered_radii[i][j]))
+                reordered_normals[i][j] = list(reversed(reordered_normals[i][j]))
+                connection_vessels[i][j] = np.flip(connection_vessels[i][j], axis=0)
+                proximal_points = connection_vessels[i][j][:, 0:3].copy()
+                distal_points = connection_vessels[i][j][:, 3:6].copy()
+                connection_vessels[i][j][:, 0:3] = distal_points
+                connection_vessels[i][j][:, 3:6] = proximal_points
+        # Take intermediate points along the connecting vessels
+        connection_points = []
+        connection_radii = []
+        connection_normals = []
+        for i in range(len(connection_vessels)):
+            tmp_tree_points = []
+            tmp_tree_radii = []
+            tmp_tree_normals = []
+            for j in range(len(connection_vessels[i])):
+                tmp_branch_points = []
+                tmp_branch_radii = []
+                tmp_branch_normals = []
+                for k in range(connection_vessels[i][j].shape[0]):
+                    if i > 1:
+                        tmp_branch_points.append(connection_vessels[i][j][k, 0:3].tolist())
+                    one_fourth = connection_vessels[i][j][k, 0:3] * (3/4) + connection_vessels[i][j][k, 3:6] * (1/4)
+                    tmp_branch_points.append(one_fourth.tolist())
+                    mid = connection_vessels[i][j][k, 0:3] * (1/2) + connection_vessels[i][j][k, 3:6] * (1/2)
+                    tmp_branch_points.append(mid.tolist())
+                    three_fourths = connection_vessels[i][j][k, 0:3] * (1/4) + connection_vessels[i][j][k, 3:6] * (3/4)
+                    tmp_branch_points.append(three_fourths.tolist())
+                    if i > 1:
+                        tmp_branch_radii.append(connection_vessels[i][j][k, 6])
+                    tmp_branch_radii.append(connection_vessels[i][j][k, 6])
+                    tmp_branch_radii.append(connection_vessels[i][j][k, 6])
+                    tmp_branch_radii.append(connection_vessels[i][j][k, 6])
+                    normal = connection_vessels[i][j][k, 3:6] - connection_vessels[i][j][k, 0:3]
+                    normal = normal / np.linalg.norm(normal)
+                    if i > 1:
+                        tmp_branch_normals.append(normal.tolist())
+                    tmp_branch_normals.append(normal.tolist())
+                    tmp_branch_normals.append(normal.tolist())
+                    tmp_branch_normals.append(normal.tolist())
+                tmp_tree_points.append(tmp_branch_points)
+                tmp_tree_radii.append(tmp_branch_radii)
+                tmp_tree_normals.append(tmp_branch_normals)
+            connection_points.append(tmp_tree_points)
+            connection_radii.append(tmp_tree_radii)
+            connection_normals.append(tmp_tree_normals)
+        # Combine the reordered points, radii, and normals with the connection points, radii, and normals
+        all_points = []
+        all_radii = []
+        all_normals = []
+        # Because the first and second vessels are lofted together
+        # to ensure smoothness, the first vessel is not included
+        for i in range(1, len(self.connected_network)):
+            network_vessel_points = []
+            network_vessel_radii = []
+            network_vessel_normals = []
+            for j in range(len(connection_points[i])):
+                vessel = []
+                radii = []
+                normals = []
+                if i == 1:
+                    vessel.extend(reordered_points[0][j])
+                    vessel.extend(connection_points[0][j])
+                    vessel.extend(connection_points[i][j])
+                    vessel.extend(reordered_points[i][j])
+                    radii.extend(reordered_radii[0][j])
+                    radii.extend(connection_radii[0][j])
+                    radii.extend(connection_radii[i][j])
+                    radii.extend(reordered_radii[i][j])
+                    normals.extend(reordered_normals[0][j])
+                    normals.extend(connection_normals[0][j])
+                    normals.extend(connection_normals[i][j])
+                    normals.extend(reordered_normals[i][j])
+                else:
+                    vessel.extend(connection_points[i][j])
+                    vessel.extend(reordered_points[i][j])
+                    radii.extend(connection_radii[i][j])
+                    radii.extend(reordered_radii[i][j])
+                    normals.extend(connection_normals[i][j])
+                    normals.extend(reordered_normals[i][j])
+                network_vessel_points.append(vessel)
+                network_vessel_radii.append(radii)
+                network_vessel_normals.append(normals)
+            all_points.append(network_vessel_points)
+            all_radii.append(network_vessel_radii)
+            all_normals.append(network_vessel_normals)
+        # Now we have complete sets of points, radii, and normals
+        # defining the solids for each vessel
+        # Create the solid
+        interp_xyz = []
+        interp_radii = []
+        interp_normals = []
+        for i in range(len(all_points)):
+            network_xyz = []
+            network_r = []
+            network_n = []
+            network_xyzr = []
+            for j in range(len(all_points[i])):
+                p = np.array(all_points[i][j]).T
+                r = np.array(all_radii[i][j]).T
+                n = np.array(all_normals[i][j]).T
+                if p.shape[1] == 2:
+                    network_xyz.append(splprep(p, k=1, s=0))
+                    rr = np.vstack((network_xyz[-1][1], r))
+                    network_r.append(splprep(rr, k=1, s=0))
+                    xyzr = np.vstack((p, r))
+                    network_xyzr.append(splprep(xyzr, k=1, s=0))
+                    # interp_n.append(splprep(n, k=1, s=0))
+                elif p.shape[1] == 3:
+                    interp_xyz.append(splprep(p, k=2, s=0))
+                    rr = np.vstack((network_xyz[-1][1], r))
+                    network_r.append(splprep(rr, k=1, s=0))
+                    xyzr = np.vstack((p, r))
+                    network_xyzr.append(splprep(xyzr, k=2, s=0))
+                    # interp_n.append(splprep(n, k=2, s=0))
+                else:
+                    network_xyz.append(splprep(p, s=0))
+                    rr = np.vstack((network_xyz[-1][1], r))
+                    network_r.append(splprep(rr, k=1, s=0))
+                    xyzr = np.vstack((p, r))
+                    network_xyzr.append(splprep(xyzr, s=0))
+                    # interp_n.append(splprep(n, s=0))
+            interp_xyz.append(network_xyz)
+            interp_radii.append(network_r)
+            interp_normals.append(network_n)
+        network_solids = []
+        network_lines = []
+        network_tubes = []    
         
         """ START OF CURRENT IMPLEMENTATION """
         # for i in range(len(interp_xyz)):

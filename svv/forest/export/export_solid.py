@@ -16,8 +16,8 @@ def smooth_junctions(mesh):
     - pv.PolyData: The mesh with the junctions smoothed.
     """
     # Extract the faces of the mesh
-    faces, walls, caps, shared_boundaries = extract_faces(mesh, None)
-    hsize = mesh.hsize
+    faces, walls, caps, lumen_surfaces, shared_boundaries = extract_faces(mesh, None)
+    hsize = mesh.cell_data['hsize'][0]
     # If there is only one wall face then proceed with smoothing
     if len(walls) == 1:
         # Smooth the mesh
@@ -31,7 +31,9 @@ def smooth_junctions(mesh):
             caps.append(cap)
         caps.insert(0, smoothed_mesh)
         model = pyvista.merge(caps)
-        model.hsize = hsize
+        hsize_array = numpy.zeros(model.n_cells, dtype=float)
+        hsize_array[0] = hsize
+        model.cell_data['hsize'] = hsize_array
         return model, smoothed_mesh, caps
     else:
         return None, None, None

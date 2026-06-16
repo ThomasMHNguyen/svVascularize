@@ -707,8 +707,17 @@ def union_tubes(tubes, lines, cap_resolution=40):
             hsize = min(hsize, (min(lines[i]['radius'])*2*numpy.pi)/cap_resolution)
             model = remesh_surface(model, hsiz=hsize)
             model = model.compute_normals(auto_orient_normals=True)
-    model.cell_data['hsize'] = 0
-    model.cell_data['hsize'][0] = hsize
+    """ START OF NEW IMPLEMENTATION """       
+    hsize_array = numpy.zeros(model.n_cells, dtype=float)
+    hsize_array[0] = hsize
+    model.cell_data['hsize'] = hsize_array
+    """ END OF NEW IMPLEMENTATION """
+    
+    
+    """ START OF OLD IMPLEMENTATION - IMMUTABLE ARRAY """
+    #model.cell_data['hsize'] = 0
+    #model.cell_data['hsize'][0] = hsize
+    """ END OF OLD IMPLEMENTATION - IMMUTABLE ARRAY """
     return model
 
 

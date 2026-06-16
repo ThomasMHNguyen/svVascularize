@@ -33,7 +33,7 @@ def extract_faces(surface, mesh, crease_angle: float = 60, verbose: bool = False
     vertex_map = build_vertex_map(face_vertices)
     edge_neighbors = build_edge_map(face_vertices, vertex_map)
     #face_neighbors = build_face_neighbors(surface)
-    element_quality = surface.compute_cell_quality(quality_measure='scaled_jacobian')
+    element_quality = surface.cell_quality(quality_measure='scaled_jacobian')
     # Use PyVista's auto-orientation with connectivity-based propagation
     # This correctly handles both outer surfaces and interior holes
     element_normals = surface.compute_normals(
@@ -43,7 +43,7 @@ def extract_faces(surface, mesh, crease_angle: float = 60, verbose: bool = False
         flip_normals=False,
         non_manifold_traversal=False
     ).cell_data["Normals"]
-    collapsed_elements = numpy.isclose(element_quality.cell_data["CellQuality"], 0.0, atol=1e-3)
+    collapsed_elements = numpy.isclose(element_quality.cell_data["scaled_jacobian"], 0.0, atol=1e-3)
     faces = partition(unallocated_elements, face_vertices, element_normals, crease_angle, vertex_map, edge_neighbors,
                       collapsed_elements)
     # Add a reconnecting step to anneal partitioned faces that are degenerate or collapsed into faces
@@ -51,7 +51,7 @@ def extract_faces(surface, mesh, crease_angle: float = 60, verbose: bool = False
     face_boundaries = []
     for face in faces:
         face_trees.append(cKDTree(surface.points[face_vertices[face, :].flatten(), :]))
-        face_boundary = surface.extract_cells(face).extract_surface().extract_feature_edges(boundary_edges=True,
+        face_boundary = surface.extract_cells(face).extract_surface(algorithm='geometry').extract_feature_edges(boundary_edges=True,
                                                                                              manifold_edges=False,
                                                                                              feature_edges=False,
                                                                                              non_manifold_edges=False)
@@ -59,7 +59,7 @@ def extract_faces(surface, mesh, crease_angle: float = 60, verbose: bool = False
     new_faces = []
     new_idx = []
     for i, face in enumerate(faces):
-        face_cells = surface.extract_cells(face).extract_surface()
+        face_cells = surface.extract_cells(face).extract_surface(algorithm='geometry')
         face_boundary = face_cells.extract_feature_edges(boundary_edges=True, manifold_edges=False,
                                                          feature_edges=False, non_manifold_edges=False)
         annealed = False
@@ -99,7 +99,7 @@ def extract_faces(surface, mesh, crease_angle: float = 60, verbose: bool = False
     # Precompute boundary-loop KD-trees for all faces (used for robust matching)
     all_boundary_trees = []
     for i in range(len(faces)):
-        f = surface.extract_cells(faces[i]).extract_surface()
+        f = surface.extract_cells(faces[i]).extract_surface(algorithm='geometry')
         loops = f.extract_feature_edges(boundary_edges=True,
                                         manifold_edges=False,
                                         feature_edges=False,
@@ -117,7 +117,7 @@ def extract_faces(surface, mesh, crease_angle: float = 60, verbose: bool = False
     lumen_boundaries = []
     lumen_boundary_trees = []
     for i in range(len(faces)):
-        f = surface.extract_cells(faces[i]).extract_surface()
+        f = surface.extract_cells(faces[i]).extract_surface(algorithm='geometry')
         tmp_bound_check = f.extract_feature_edges(boundary_edges=True, manifold_edges=False,
                                                  feature_edges=False, non_manifold_edges=False)
         tmp_bound_check = tmp_bound_check.split_bodies()
@@ -479,7 +479,7 @@ def extract_faces(surface, mesh, crease_angle: float = 60, verbose: bool = False
     wall_boundaries = []
     for i in tqdm.trange(len(walls), desc="Mapping wall surfaces <-> mesh ids", leave=False):
         wall_cells = surface.extract_cells(walls[i])
-        wall_surface = wall_cells.extract_surface()
+        wall_surface = wall_cells.extract_surface(algorithm='geometry')
         if not isinstance(mesh, type(None)):
             wall_surface.point_data["GlobalNodeID"] = numpy.zeros(wall_surface.n_points, dtype=numpy.int32)
             wall_surface.cell_data['GlobalElementID'] = numpy.zeros(wall_surface.n_cells, dtype=numpy.int32)
@@ -522,7 +522,7 @@ def extract_faces(surface, mesh, crease_angle: float = 60, verbose: bool = False
     for i in tqdm.trange(len(caps), desc="Mapping cap surfaces <-> mesh ids", leave=False):
         face_cap = caps[i]
         cap_cells = surface.extract_cells(face_cap)
-        cap_surface = cap_cells.extract_surface()
+        cap_surface = cap_cells.extract_surface(algorithm='geometry')
         if not isinstance(mesh, type(None)):
             cap_surface.point_data["GlobalNodeID"] = numpy.zeros(cap_surface.n_points, dtype=numpy.int32)
             cap_surface.cell_data["GlobalElementID"] = numpy.zeros(cap_surface.n_cells, dtype=numpy.int32)
@@ -564,7 +564,7 @@ def extract_faces(surface, mesh, crease_angle: float = 60, verbose: bool = False
     for i in tqdm.trange(len(lumens), desc="Mapping lumen surfaces <-> mesh ids", leave=False):
         face_lumen = lumens[i]
         lumen_cells = surface.extract_cells(face_lumen)
-        lumen_surface = lumen_cells.extract_surface()
+        lumen_surface = lumen_cells.extract_surface(algorithm='geometry')
         if not isinstance(mesh, type(None)):
             lumen_surface.point_data["GlobalNodeID"] = numpy.zeros(lumen_surface.n_points, dtype=int)
             lumen_surface.cell_data["GlobalElementID"] = numpy.zeros(lumen_surface.n_cells, dtype=int)
