@@ -66,7 +66,8 @@ class Forest(object):
                 else:
                     tree = Tree()
                 tree.physical_clearance = self.physical_clearance
-                tree.domain_clearance = self.domain_clearance
+                # tree.domain_clearance = self.domain_clearance
+                # tree.domain = self.domain
                 network.append(tree)
             networks.append(network)
         self.networks = networks
@@ -86,7 +87,6 @@ class Forest(object):
             The tolerance for the convexity of the domain.
         """
         self.domain = domain
-
         # Determine convexity when available; when missing, treat as effectively
         # convex so algorithms fall back to simpler distance-based paths.
         domain_convexity = getattr(domain, "convexity", None)
@@ -268,7 +268,7 @@ class Forest(object):
                     success = False
                     while not success:
                         #tmp_new_vessels, tmp_added_vessels, tmp_new_vessel_map, _, _, tmp_nonconvex_count = self.networks[i][j].add(inplace=False)
-                        results = self.networks[i][j].add(inplace=False)
+                        results = self.networks[i][j].add(inplace=False,**kwargs)
                         change_i, change_j, new_tmp_data, old_tmp_data, tmp_new_vessel_map, connectivity, inds, mesh_cell, tmp_added_vessels = results
                         #tmp_new_vessels = numpy.vstack([self.networks[i][j].data, tmp_added_vessels[0], tmp_added_vessels[1]])
                         change_i = numpy.array(change_i, dtype=int)
