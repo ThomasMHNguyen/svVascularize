@@ -95,8 +95,12 @@ def add_vessel(tree, **kwargs):
     use_brute = kwargs.pop('use_brute', False)
     max_iter = kwargs.pop('max_iter', 20)
     return_cost = kwargs.pop('return_cost', False)
-    max_vessel_fac = kwargs.pop("max_vessel_fac",None)
+    # max_vessel_fac = kwargs.pop("max_vessel_fac",None)
     min_vessel_fac = kwargs.pop("min_vessel_fac",4)
+    vessels_max_angle = kwargs.pop("vessels_max_angle",0.5) #max angle for vessels to grow
+    initial_max_length = kwargs.pop("initial_max_length",0.5) # Allows the main trunk to span half the cube
+    terminal_max_length = kwargs.pop("terminal_max_length",0.05) #small terminal vessels have max distance
+    target_total_vessels = kwargs.pop("target_total_vessels",50) #Total vessels you intend to grow
     #defualt_threshold = ((tree.domain.mesh.volume ** (1/3)) /
     #                     (tree.n_terminals ** threshold_exponent)) + tree.data[0, 21]*2.0
     defualt_threshold = ((tree.domain.volume ** (1/3)) /
@@ -107,7 +111,7 @@ def add_vessel(tree, **kwargs):
     #                      tree.parameters.radius_exponent, tree.parameters.length_exponent)
     tree_scale = tree.tree_scale
     tree.volume_scale = tree_scale
-    threshold = kwargs.pop('threshold', 0.3)
+    threshold = kwargs.pop('threshold', defualt_threshold)
     volume_threshold = kwargs.get("volume_threshold",None)
     # volume_threshold = kwargs.get("volume_threshold",None)
     nonconvex_outside = False
@@ -197,7 +201,7 @@ def add_vessel(tree, **kwargs):
                 #                 cos_global = np.dot(v_global_intent, v_growth) / (norm_global * norm_g)
                                 
                 #                 # Use a stricter threshold (0.5 = 60 degrees) to prevent "sideways" stretching
-                #                 closest_forward = (cos_local > 0.2) and (cos_global > 0.2)
+                #                 closest_forward = (cos_local > vessels_max_angle) and (cos_global > vessels_max_angle)
                 #             else:
                 #                 closest_forward = False
                 #             valid_points.append(closest_forward)
@@ -238,9 +242,36 @@ def add_vessel(tree, **kwargs):
                         if dist < data[bifurcation_vessel, 21]*min_vessel_fac:
                             #print('too close')
                             continue
-                        if max_vessel_dist is not None and max_vessel_fac > min_vessel_fac:
-                            if dist > data[bifurcation_vessel, 21]*max_vessel_fac:
-                                continue
+                        
+                        # Extract the generation level of the vessel being split
+                        # (Assuming your tree data tracks generation or number of parent splits)
+                        # If your data array doesn't track generation, you can trace back to root to find it.
+                        parent_generation = data[bifurcation_vessel, 25] # Change 25 to your actual generation index
+
+                        # Max length drops the further down the tree hierarchy we go
+                        generation_allowed_max = initial_max_length * (0.8 ** parent_generation)
+
+                        # Set rules on length for newly generated vessels
+                        if dist > generation_allowed_max:
+                            continue
+                        
+                        # Base parameters
+                        # initial_max_length = 0.5   # Allows the main trunk to span half the cube
+                        # terminal_max_length = 0.08 # enforce max length on small vessels
+                        # target_total_vessels = 500 # Total vessels you intend to grow
+
+                        # Calculate a linearly decaying maximum length threshold
+                        # current_vessel_count = tree.data.shape[0]
+                        # decay_factor = min(current_vessel_count / target_total_vessels, 1.0)
+                        # dynamic_max_length = initial_max_length - (decay_factor * (initial_max_length - terminal_max_length))
+
+                        # # Enforce constraint
+                        # if dist > dynamic_max_length:
+                        #     continue
+                        
+                        # if max_vessel_fac is not None and max_vessel_fac > min_vessel_fac:
+                        #     if dist > data[bifurcation_vessel, 21]*max_vessel_fac:
+                        #         continue
 
                         cost, triad, vol = construct_optimizer(tree, terminal_points[i, :], closest_vessels[j, i])
                         bifurcation_cell = mesh_cells[i]
@@ -345,7 +376,7 @@ def add_vessel(tree, **kwargs):
                             (norm_global*norm_daughter)
                         cos_local = np.dot(local_parent,daughter_vessel)/\
                             (norm_local*norm_daughter)
-                        if (cos_global > 0.5) and (cos_local > 0.5):
+                        if (cos_global > vessels_max_angle) and (cos_local > vessels_max_angle):
                             pass
                         else:
                             continue
@@ -720,18 +751,7 @@ def add_vessel(tree, **kwargs):
                                            tree.parameters.terminal_pressure, tree.parameters.root_pressure,
                                            tree.parameters.radius_exponent, tree.parameters.length_exponent)
                         """ CHECK TERMINAL POINT DOWNSTREAM"""
-                        if (np.linalg.norm(np.abs(terminal_point.reshape(3,) - np.array([-0.01882263,  0.25617913,  0.34540027]))) < 1e-4):
-                            pass
-                            # print("Parent vessel start is",parent_vessel[0,0:3])
-                            # print("Parent vessel end is",parent_vessel[0,3:6])
-                            # print("Terminal daughter vessel start is",terminal_daughter_vessel[0,0:3])
-                            # print("Terminal daughter vessel end is",terminal_daughter_vessel[0,3:6])
-                            # print("Terminal Vessel start is",terminal_vessel[0,0:3])
-                            # print("Terminal Vessel end is",terminal_vessel[0,3:6])
-                            # print("Terminal point post connection is",terminal_point)
-                            # print("bifurcation point post connection is",bifurcation_point)
-                            # print("Bifurcation vessel end post connection is ",data[bifurcation_vessel, 3:6])
-                            # print("Bifurcation vessel index post connection is",bifurcation_vessel)
+                        # print(bifurcation_point)
                         start_3_0 = perf_counter()
                         terminal_map = TreeMap()
                         #upstream = numpy.array(sorted(set(tree.vessel_map[bifurcation_vessel]['upstream'])),dtype=int)
