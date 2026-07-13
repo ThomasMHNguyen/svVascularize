@@ -324,6 +324,7 @@ class Simulation(object):
                             # hsize = fluid_surface.hsize
                             hsize = fluid_surface.cell_data['hsize'][0]
                             if (boundary_layer or wall_layers) and fluid:
+                                # fluid_surface = fluid_volume.extract_surface()
                                 fluid_surface = fluid_volume.extract_surface(algorithm = 'geometry')
                                 fluid_surface_faces = extract_faces(fluid_surface, fluid_volume)
                                 # print("Returning fluid surface faces")
@@ -381,7 +382,6 @@ class Simulation(object):
                             hsize_array = numpy.zeros(fluid_surface.n_cells, dtype=float)
                             hsize_array[0] = hsize
                             fluid_surface.cell_data['hsize'] = hsize_array
-                            print("Adding fluid surface to list.")
                         self.fluid_domain_surface_meshes.append(fluid_surface)
                         self.fluid_domain_volume_meshes.append(fluid_volume)
                     else:
