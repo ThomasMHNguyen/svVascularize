@@ -47,7 +47,7 @@ def extract_faces(surface, mesh, crease_angle: float = 60, verbose: bool = False
     face_boundaries = []
     for face in faces:
         face_trees.append(cKDTree(surface.points[face_vertices[face, :].flatten(), :]))
-        face_boundary = surface.extract_cells(face).extract_surface().extract_feature_edges(boundary_edges=True,
+        face_boundary = surface.extract_cells(face).extract_surface(algorithm = 'geometry').extract_feature_edges(boundary_edges=True,
                                                                                              manifold_edges=False,
                                                                                              feature_edges=False,
                                                                                              non_manifold_edges=False)
@@ -55,7 +55,7 @@ def extract_faces(surface, mesh, crease_angle: float = 60, verbose: bool = False
     new_faces = []
     new_idx = []
     for i, face in enumerate(faces):
-        face_cells = surface.extract_cells(face).extract_surface()
+        face_cells = surface.extract_cells(face).extract_surface(algorithm = 'geometry')
         face_boundary = face_cells.extract_feature_edges(boundary_edges=True, manifold_edges=False,
                                                          feature_edges=False, non_manifold_edges=False)
         annealed = False
@@ -100,7 +100,7 @@ def extract_faces(surface, mesh, crease_angle: float = 60, verbose: bool = False
     cap_boundaries = []
     cap_boundary_trees = []
     for i in range(len(faces)):
-        f = surface.extract_cells(faces[i]).extract_surface()
+        f = surface.extract_cells(faces[i]).extract_surface(algorithm = 'geometry')
         tmp_bound_check = f.extract_feature_edges(boundary_edges=True, manifold_edges=False,
                                                  feature_edges=False, non_manifold_edges=False)
         tmp_bound_check = tmp_bound_check.split_bodies()
@@ -225,7 +225,7 @@ def extract_faces(surface, mesh, crease_angle: float = 60, verbose: bool = False
     wall_boundaries = []
     for i in tqdm.trange(len(walls), desc="Mapping wall surfaces <-> mesh ids", leave=False):
         wall_cells = surface.extract_cells(walls[i])
-        wall_surface = wall_cells.extract_surface()
+        wall_surface = wall_cells.extract_surface(algorithm = 'geometry')
         if not isinstance(mesh, type(None)):
             wall_surface.point_data["GlobalNodeID"] = numpy.zeros(wall_surface.n_points, dtype=int)
             wall_surface.cell_data['GlobalElementID'] = numpy.zeros(wall_surface.n_cells, dtype=int)
@@ -253,7 +253,7 @@ def extract_faces(surface, mesh, crease_angle: float = 60, verbose: bool = False
     for i in tqdm.trange(len(caps), desc="Mapping cap surfaces <-> mesh ids", leave=False):
         face_cap = caps[i]
         cap_cells = surface.extract_cells(face_cap)
-        cap_surface = cap_cells.extract_surface()
+        cap_surface = cap_cells.extract_surface(algorithm = 'geometry')
         if not isinstance(mesh, type(None)):
             cap_surface.point_data["GlobalNodeID"] = numpy.zeros(cap_surface.n_points, dtype=int)
             cap_surface.cell_data["GlobalElementID"] = numpy.zeros(cap_surface.n_cells, dtype=int)
