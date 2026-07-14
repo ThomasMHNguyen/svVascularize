@@ -246,7 +246,21 @@ def add_vessel(tree, **kwargs):
                         # Extract the generation level of the vessel being split
                         # (Assuming your tree data tracks generation or number of parent splits)
                         # If your data array doesn't track generation, you can trace back to root to find it.
-                        parent_generation = data[bifurcation_vessel, 25] # Change 25 to your actual generation index
+                        parent_generation = data[bifurcation_vessel, 17]
+                        
+                        # 1. Determine the generation of the candidate parent vessel
+                        generation = 0
+                        parent_val = data[bifurcation_vessel, 17]
+
+                        # Trace backwards step-by-step
+                        visited_indices = set() # Safety check to prevent infinite loops
+                        while not np.isnan(parent_val) and parent_val >= 0 and parent_val not in visited_indices:
+                            generation += 1
+                            current_parent_idx = int(parent_val)
+                            visited_indices.add(current_parent_idx)
+                            
+                            # Move to the next parent upstream
+                            parent_val = data[current_parent_idx, 17]
 
                         # Max length drops the further down the tree hierarchy we go
                         generation_allowed_max = initial_max_length * (0.8 ** parent_generation)
