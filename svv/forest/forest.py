@@ -53,6 +53,7 @@ class Forest(object):
         self.preallocation_step = kwargs.get('preallocation_step', None)
         self.geodesic = None
         self.convex = None
+        tree_parameters = kwargs.get("tree_parameters",None)
         if isinstance(self.start_points, type(None)):
             self.start_points = [[None for j in range(self.n_trees_per_network[i])] for i in range(self.n_networks)]
         if isinstance(self.directions, type(None)):
@@ -62,9 +63,16 @@ class Forest(object):
             network = []
             for j in range(self.n_trees_per_network[i]):
                 if self.preallocation_step is not None:
-                    tree = Tree(preallocation_step=self.preallocation_step)
+                    if tree_parameters is None:
+                        tree = Tree(preallocation_step=self.preallocation_step)
+                    else:
+                        tree = Tree(preallocation_step=self.preallocation_step,
+                                parameters = tree_parameters[j])
                 else:
-                    tree = Tree()
+                    if tree_parameters is None:
+                        tree = Tree()
+                    else:
+                        tree = Tree(parameters = tree_parameters[j])
                 tree.physical_clearance = self.physical_clearance
                 # tree.domain_clearance = self.domain_clearance
                 # tree.domain = self.domain
