@@ -243,50 +243,6 @@ def add_vessel(tree, **kwargs):
                             #print('too close')
                             continue
                         
-                        # Extract the generation level of the vessel being split
-                        # (Assuming your tree data tracks generation or number of parent splits)
-                        # If your data array doesn't track generation, you can trace back to root to find it.
-                        parent_generation = data[bifurcation_vessel, 17]
-                        
-                        # 1. Determine the generation of the candidate parent vessel
-                        generation = 0
-                        parent_val = data[bifurcation_vessel, 17]
-
-                        # Trace backwards step-by-step
-                        visited_indices = set() # Safety check to prevent infinite loops
-                        while not np.isnan(parent_val) and parent_val >= 0 and parent_val not in visited_indices:
-                            generation += 1
-                            current_parent_idx = int(parent_val)
-                            visited_indices.add(current_parent_idx)
-                            
-                            # Move to the next parent upstream
-                            parent_val = data[current_parent_idx, 17]
-
-                        # Max length drops the further down the tree hierarchy we go
-                        generation_allowed_max = initial_max_length * (0.8 ** parent_generation)
-
-                        # Set rules on length for newly generated vessels
-                        if dist > generation_allowed_max:
-                            continue
-                        
-                        # Base parameters
-                        # initial_max_length = 0.5   # Allows the main trunk to span half the cube
-                        # terminal_max_length = 0.08 # enforce max length on small vessels
-                        # target_total_vessels = 500 # Total vessels you intend to grow
-
-                        # Calculate a linearly decaying maximum length threshold
-                        # current_vessel_count = tree.data.shape[0]
-                        # decay_factor = min(current_vessel_count / target_total_vessels, 1.0)
-                        # dynamic_max_length = initial_max_length - (decay_factor * (initial_max_length - terminal_max_length))
-
-                        # # Enforce constraint
-                        # if dist > dynamic_max_length:
-                        #     continue
-                        
-                        # if max_vessel_fac is not None and max_vessel_fac > min_vessel_fac:
-                        #     if dist > data[bifurcation_vessel, 21]*max_vessel_fac:
-                        #         continue
-
                         cost, triad, vol = construct_optimizer(tree, terminal_points[i, :], closest_vessels[j, i])
                         bifurcation_cell = mesh_cells[i]
                         if callback:
