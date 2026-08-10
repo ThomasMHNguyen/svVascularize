@@ -113,6 +113,7 @@ def add_vessel(tree, **kwargs):
     tree.volume_scale = tree_scale
     threshold = kwargs.pop('threshold', defualt_threshold)
     volume_threshold = kwargs.get("volume_threshold",None)
+    angle_constraint = kwargs.get("angle_constraint",False)
     # volume_threshold = kwargs.get("volume_threshold",None)
     nonconvex_outside = False
     #search_tree = cKDTree((tree.data[:, 0:3] + tree.data[:, 3:6]) / 2)
@@ -332,26 +333,58 @@ def add_vessel(tree, **kwargs):
                         ### CHECK ANGLES ###
                         
                         """ --- START OF CONSTRAINTS OF GROWTH DIRECTION POST OPTIMIZATION  --- """
-                        v_global_parent = (tree.data[0,3:6] - tree.data[0,0:3]).reshape(3,)
-                        norm_global = np.linalg.norm(v_global_parent)
                         
-                        daughter_vessel = (terminal_point - tree.data[bifurcation_vessel,3:6]).reshape(3,)
-                        norm_daughter = np.linalg.norm(daughter_vessel)
-                        
-                        local_parent = (tree.data[bifurcation_vessel,3:6] - \
-                            tree.data[bifurcation_vessel,0:3]).reshape(3,)
-                        norm_local = np.linalg.norm(local_parent)
-                        
-                        cos_global = np.dot(v_global_parent,daughter_vessel)/\
-                            (norm_global*norm_daughter)
-                        cos_local = np.dot(local_parent,daughter_vessel)/\
-                            (norm_local*norm_daughter)
-                        if (cos_global > vessels_max_angle) and (cos_local > vessels_max_angle):
-                            pass
+                        if angle_constraint:
+                            print("Angle constrained vessels.")
+                            ### New routine
+                            # u_parent = (bifurcation_point - data[bifurcation_vessel, 0:3]).reshape(3,)
+                            # u_terminal = (terminal_point - bifurcation_point).reshape(3,)
+                            # u_cont_daughter = (data[bifurcation_vessel, 3:6] - bifurcation_point).reshape(3,)
+                            
+                            # u_parent/=np.linalg.norm(u_parent)
+                            # u_terminal/=np.linalg.norm(u_terminal)
+                            # u_cont_daughter/=np.linalg.norm(u_cont_daughter)
+                            
+                            # dot_parent_terminal = numpy.dot(u_parent,u_terminal)
+                            # dot_parent_daughter = np.dot(u_parent,u_cont_daughter)
+                            # dot_terminal_daughter = np.dot(u_cont_daughter,u_terminal)
+                            
+                            # # 1. Parent-to-continuation daughter deflection (<= 45 deg)
+                            # if dot_parent_daughter < numpy.cos(numpy.deg2rad(45)):
+                            #     continue
+
+                            # # 2. Parent-to-terminal branch forward flow (<= 90 deg)
+                            # if dot_parent_terminal < numpy.cos(numpy.deg2rad(90)):
+                            #     continue
+
+                            # # 3. Daughter-to-daughter opening angle (between 30 deg and 120 deg)
+                            # if dot_terminal_daughter > numpy.cos(numpy.deg2rad(30)) or dot_terminal_daughter < numpy.cos(numpy.deg2rad(120)):
+                            #     continue
+                            ### Old routine
+                            
+                            v_global_parent = (tree.data[0,3:6] - tree.data[0,0:3]).reshape(3,)
+                            norm_global = np.linalg.norm(v_global_parent)
+                            
+                            daughter_vessel = (terminal_point - tree.data[bifurcation_vessel,3:6]).reshape(3,)
+                            norm_daughter = np.linalg.norm(daughter_vessel)
+                            
+                            local_parent = (tree.data[bifurcation_vessel,3:6] - \
+                                tree.data[bifurcation_vessel,0:3]).reshape(3,)
+                            norm_local = np.linalg.norm(local_parent)
+                            
+                            cos_global = np.dot(v_global_parent,daughter_vessel)/\
+                                (norm_global*norm_daughter)
+                            cos_local = np.dot(local_parent,daughter_vessel)/\
+                                (norm_local*norm_daughter)
+                            if (cos_global > vessels_max_angle) and (cos_local > vessels_max_angle):
+                                pass
+                            else:
+                                continue
                         else:
-                            continue
-                        
+                            print("NO angle constrained vessels")
                         """ --- END OF CONSTRAINTS OF GROWTH DIRECTION POST OPTIMIZATION  --- """
+                        
+                            
                         vec_parent = (data[bifurcation_vessel, 0:3] - bifurcation_point).reshape(1,3)
                         vec_term = (terminal_point - bifurcation_point).reshape(1,3)
                         vec_daughter = (data[bifurcation_vessel, 3:6] - bifurcation_point).reshape(1,3)
