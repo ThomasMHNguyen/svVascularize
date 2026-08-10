@@ -255,6 +255,14 @@ class Forest(object):
         Add a tree to the forest.
         """
         decay_probability = kwargs.pop('decay_probability', 0.9)
+        angle_constraint = kwargs.get("angle_constraint",None)
+        if angle_constraint is not None:
+            if angle_constraint == "new":
+                print("New Angle Constraint is implemented for terminal generation.")
+            elif angle_constraint == "old":
+                            print("Old Angle Constraint is implemented for terminal generation.")
+        else:
+            print("NO Angle Constraint is implemented for terminal generation.")
         self.connections = None
         if len(args) == 0:
             n_vessels = 1
