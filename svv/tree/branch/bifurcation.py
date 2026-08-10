@@ -97,10 +97,10 @@ def add_vessel(tree, **kwargs):
     return_cost = kwargs.pop('return_cost', False)
     # max_vessel_fac = kwargs.pop("max_vessel_fac",None)
     min_vessel_fac = kwargs.pop("min_vessel_fac",4)
-    vessels_max_angle = kwargs.pop("vessels_max_angle",0.5) #max angle for vessels to grow
-    initial_max_length = kwargs.pop("initial_max_length",0.5) # Allows the main trunk to span half the cube
-    terminal_max_length = kwargs.pop("terminal_max_length",0.05) #small terminal vessels have max distance
-    target_total_vessels = kwargs.pop("target_total_vessels",50) #Total vessels you intend to grow
+    theta_parent_terminal = float(kwargs.pop("theta_parent_terminal",90))
+    theta_parent_daughter = float(kwargs.pop("theta_parent_terminal",45))
+    theta_terminal_daughter_min = kwargs.pop("theta_parent_terminal",30)
+    theta_terminal_daughter_min = kwargs.pop("theta_parent_terminal",120)
     #defualt_threshold = ((tree.domain.mesh.volume ** (1/3)) /
     #                     (tree.n_terminals ** threshold_exponent)) + tree.data[0, 21]*2.0
     defualt_threshold = ((tree.domain.volume ** (1/3)) /
@@ -164,59 +164,6 @@ def add_vessel(tree, **kwargs):
                     closest_vessels = closest_vessels[:, ~numpy.isnan(terminal_points).any(axis=1)]
                     mesh_cells = mesh_cells[~numpy.isnan(terminal_points).any(axis=1)]
                     terminal_points = terminal_points[~numpy.isnan(terminal_points).any(axis=1)]
-                    
-                """ --- CONSTRAINTS OF GROWTH DIRECTION PRE OPTIMIZATION --- """
-                # if len(terminal_points) > 0:
-                #     # Goal 2a: Directional Filter
-                #     valid_mask = []
-                #     # Obtain the GLOBAL parent vessel
-                #     # v_global_intent = tree.data[0,12:15]
-                #     v_global_intent = tree.data[0,3:6] - tree.data[0,0:3]
-                #     norm_global = np.linalg.norm(v_global_intent)
-                    
-                #     for i in range(len(terminal_points)):
-                        
-                #         # Get the LOCAL parent vessel
-                #         # parent_idx = int(closest_vessels[0, i]) # checking the closest one
-                #         # Check ALL potential parents for this specific terminal point based on c_closest_
-                #         potential_parent_indices = closest_vessels[:n_closest_vessels, i].astype(int)
-                #         for parent_idx in potential_parent_indices:
-                #             valid_points = []
-                #             parent_tip = tree.data[parent_idx, 3:6]
-                #             parent_start = tree.data[parent_idx, 0:3]
-                        
-                #             # Growth of new vessel from local tip to the new point
-                #             v_growth = terminal_points[i] - parent_tip
-                #             norm_g = np.linalg.norm(v_growth)
-                            
-                #             # 4. Local parent direction
-                #             v_local_parent = parent_tip - parent_start
-                #             norm_lp = np.linalg.norm(v_local_parent)
-                            
-                #             if norm_g > 0 and norm_lp > 0 and norm_global > 0:
-                #                 # Check A: Is it growing forward relative to its LOCAL parent?
-                #                 cos_local = np.dot(v_local_parent, v_growth) / (norm_lp * norm_g)
-                                
-                #                 # Check B: Is it growing forward relative to the GLOBAL vesel direction?
-                #                 # This prevents the tree from doubling back toward the inlet
-                #                 cos_global = np.dot(v_global_intent, v_growth) / (norm_global * norm_g)
-                                
-                #                 # Use a stricter threshold (0.5 = 60 degrees) to prevent "sideways" stretching
-                #                 closest_forward = (cos_local > vessels_max_angle) and (cos_global > vessels_max_angle)
-                #             else:
-                #                 closest_forward = False
-                #             valid_points.append(closest_forward)
-                #         if all(valid_points):
-                #             is_forward = True
-                #         else:
-                #             is_forward = False                         
-                #         valid_mask.append(is_forward)
-                #     terminal_points = terminal_points[valid_mask]
-                #     terminal_point_distances = terminal_point_distances[:, valid_mask]
-                #     closest_vessels = closest_vessels[:, valid_mask]
-                #     mesh_cells = mesh_cells[valid_mask]
-                    
-                """ --- END OF CONSTRAINTS OF GROWTH DIRECTION PRE OPTIMIZATION   --- """
                 if len(terminal_points) == 0:
                     threshold *= threshold_adjuster
                     # tree.times['get_points'] logic here if needed
