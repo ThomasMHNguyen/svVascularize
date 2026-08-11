@@ -50,15 +50,21 @@ def assign_network(forest, *args, **kwargs):
         network_id = 0
     else:
         network_id = args[0]
-    # Determine how many parent branches don't have child branches
+    
     neighbors = kwargs.get('neighbors', int(t * numpy.sum(numpy.all(numpy.isnan(forest.networks[network_id][0].data[:, 15:17]), axis=1))))
+    # Check which algorithm to use
+    assign_type = kwargs.get("assign_type",None)
+    #Assignment algorithm
+    lambda_1 = kwargs.get('lambda_1',1)
+    lambda_2 = kwargs.get('lambda_2',1)
+    print("Assignment Type is {}".format(assign_type))
+    print("Lambda_1 is {}".format(lambda_1))
+    print("Lambda_2 is {}".format(lambda_2))
     if forest.n_trees_per_network[network_id] >= 2:
         tree_0 = forest.networks[network_id][0].data
         tree_1 = forest.networks[network_id][1].data
         idx_0 = numpy.argwhere(numpy.all(numpy.isnan(tree_0[:, 15:17]), axis=1)).flatten()
         idx_1 = numpy.argwhere(numpy.all(numpy.isnan(tree_1[:, 15:17]), axis=1)).flatten()
-        # print(idx_0,idx_1)
-        # sys.exit(1)
         terminals_0_ind = idx_0
         terminals_0_pts = tree_0[idx_0, 3:6]
         terminals_0_tree = cKDTree(terminals_0_pts)
@@ -77,27 +83,57 @@ def assign_network(forest, *args, **kwargs):
         M_sparse = []
         if forest.convex:
             #C = cdist(terminals_0_pts, terminals_1_pts)
-            
-            # Ask what are the closest neighbors;
-            # Note: dists_1 corresponds to distances between tree 0 endpoints to tree 1 endpoints
-            # E.g.: dists_1[0,:] corresponds to the 3 closest vessels on Tree #1 for Tree #0
             dists_1, idxs_1 = terminals_1_tree.query(terminals_0_pts, k=neighbors)
             dists_0, idxs_0 = terminals_0_tree.query(terminals_1_pts, k=neighbors)
-            # Note: C is deprecated
             # C[rows, idxs_1.flatten()] = dists_1.flatten()
             # C[idxs_0.flatten(), cols] = dists_0.flatten()
             all_rows = numpy.array(rows.tolist() + idxs_0.flatten().tolist())
             all_cols = numpy.array(idxs_1.flatten().tolist() + cols.tolist())
-            all_data = numpy.array(dists_1.flatten().tolist() + dists_0.flatten().tolist())
-            # Linear path interpolatrs
+            
+            ### Old Assignment Method
+            if assign_type == 'old':
+                all_data = numpy.array(dists_1.flatten().tolist() + dists_0.flatten().tolist())
+            elif assign_type == 'new':
+                # Pass 1: Compute raw metrics for all candidate terminal pairs
+                raw_distances = []
+                raw_directions = []
+                
+                terminals_0_dirs = -tree_0[idx_0, 12:15]
+                terminals_1_dirs = -tree_1[idx_1, 12:15]
+                                
+                for i, j in zip(all_rows, all_cols):
+                    # Normalize terminal direction vectors
+                    wi = terminals_0_dirs[i] / numpy.linalg.norm(terminals_0_dirs[i])
+                    wj = terminals_1_dirs[j] / numpy.linalg.norm(terminals_1_dirs[j])
+
+                    # Connection vector from terminal i to terminal j
+                    connection = terminals_1_pts[j, :] - terminals_0_pts[i, :]
+                    dist = numpy.linalg.norm(connection)
+                    v = numpy.divide(connection,dist,where = dist != 0,out = connection)
+                    
+                    # Direction cost bounded in [0, 4]
+                    # (1 - wi.v): 0 if wi points toward j, 2 if pointing away
+                    # (1 + wj.v): 0 if wj points toward i, 2 if pointing away
+                    dir_cost = (1.0 - numpy.dot(wi, v)) + (1.0 + numpy.dot(wj, v))
+
+                    raw_distances.append(dist)
+                    raw_directions.append(dir_cost)
+                
+                # Pass 2: Normalize globally and compute total combined cost
+                max_dist = max(raw_distances) if raw_distances and max(raw_distances) > 0 else 1.0
+                max_dir = max(raw_directions) if raw_directions and max(raw_directions) > 0 else 4.0  # Theoretical maximum penalty for direction alignment
+
+                all_data = numpy.array([
+                    lambda_1 * (d / max_dist) + lambda_2 * (c / max_dir)
+                    for d, c in zip(raw_distances, raw_directions)
+                ])               
+                
+                
             function_data = []
             for i, j in zip(all_rows, all_cols):
-                # Create line segment connecting endpoints
                 path_pts = deepcopy(numpy.vstack((terminals_0_pts[i, :], terminals_1_pts[j, :])))
                 k = 1
-                # Fit a B-spline to endpoints (k=1 means straight line)
                 tck = deepcopy(splprep(path_pts.T, s=0, k=k))
-                # function is to track point on B-spline curve
                 def func(t_, tck=tck):
                     return numpy.array(splev(t_, tck[0])).T
                 function_data.append(func)
@@ -223,11 +259,9 @@ def assign_network(forest, *args, **kwargs):
                     #M[i][j] = func
                 M.append(tmp_M)
             """
-        # Generate sparse matrix to store closest distances between the tree vessels
         C_sparse = coo_matrix((all_data, (all_rows, all_cols)),
                               shape=(terminals_0_pts.shape[0], terminals_1_pts.shape[0]))
         #M_dense = numpy.full((terminals_0_pts.shape[0], terminals_1_pts.shape[0]), None)
-        # Build function registry dictionary
         M_sparse = {}
         for i, j, func in zip(all_rows, all_cols, function_data):
             M_sparse[str(i)+','+str(j)] = func
@@ -238,17 +272,13 @@ def assign_network(forest, *args, **kwargs):
         #                      shape=(terminals_0_pts.shape[0], terminals_1_pts.shape[0]))
         print("Calculating optimal assignment...")
         #_, assignment = linear_sum_assignment(C)
-        # row_ind, col_ind = min_weight_full_bipartite_matching(C_sparse)
         try:
-            # Solve bipartite matching: optimization problem
             row_ind, col_ind = min_weight_full_bipartite_matching(C_sparse.tocsr())
         except:
             print("ERROR: Could not find optimal assignment. Try increasing the number of neighbors allowed in search.")
-            raise ValueError
-            # return None, None
+            return None, None
         print("Finished.")
         midpoints = []
-        #Find winning connections
         for i, j in zip(row_ind, col_ind):
             m_val = M_sparse[str(i)+','+str(j)]
             if isinstance(m_val, type(None)):
